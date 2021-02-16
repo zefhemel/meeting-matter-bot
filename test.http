@@ -1,0 +1,21 @@
+### Me
+GET {{$dotenv server}}/api/v4/users/me
+Authorization: Bearer {{$dotenv token}}
+
+### List channels
+GET {{$dotenv server}}/api/v4/channels
+Authorization: Bearer {{$dotenv token}}
+
+### Post a message
+POST {{$dotenv server}}/api/v4/posts
+Authorization: Bearer {{$dotenv token}}
+Content-type: application/json
+
+{
+  "channel_id": "rd15u86ezjgy7qrcbyxitwnf1a",
+  "message": "This is a test"
+}
+
+### List messages
+GET {{$dotenv server}}/api/v4/channels/rd15u86ezjgy7qrcbyxitwnf1a/posts
+Authorization: Bearer {{$dotenv token}}

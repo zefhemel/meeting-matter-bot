@@ -3,6 +3,7 @@ module zefbot
 go 1.16
 
 require (
+	github.com/aws/aws-lambda-go v1.22.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/dyatlov/go-opengraph v0.0.0-20210112100619-dae8665a5b09 // indirect
 	github.com/go-ldap/ldap v3.0.3+incompatible // indirect

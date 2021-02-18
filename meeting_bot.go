@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	_ "embed"
@@ -90,13 +89,6 @@ func (mb *MeetingBot) lookupChannel(channelID string) *model.Channel {
 	}
 }
 
-func cleanMessageHashtags(s, hashtags string) string {
-	for _, ht := range strings.Split(hashtags, " ") {
-		s = strings.ReplaceAll(s, ht, "")
-	}
-	return s
-}
-
 func (mb *MeetingBot) listTopicPosts(channelID string) ([]*model.Post, error) {
 	pl, resp := mb.mmClient.GetPostsForChannel(channelID, 0, 100, "")
 	topicPosts := make([]*model.Post, 0, 20)
@@ -145,11 +137,6 @@ func (mb *MeetingBot) handleDirect(post *model.Post, channel *model.Channel) {
 	}
 }
 
-func cleanMessage(s string) string {
-	re := regexp.MustCompile(`[@#][\S]+`)
-	return strings.TrimSpace(re.ReplaceAllString(s, ""))
-}
-
 func (mb *MeetingBot) handleChannel(post *model.Post, channel *model.Channel) {
 	switch post.Hashtags {
 	case "#topic", "#agenda":
@@ -184,7 +171,7 @@ func (mb *MeetingBot) handleChannel(post *model.Post, channel *model.Channel) {
 			}
 			topicMessages := make([]string, 0, 20)
 			for _, topicPost := range topicPosts {
-				topicMessages = append(topicMessages, fmt.Sprintf("* %s", cleanMessageHashtags(topicPost.Message, topicPost.Hashtags)))
+				topicMessages = append(topicMessages, fmt.Sprintf("* %s", cleanMessageHashtags(topicPost.Message)))
 			}
 			_, resp := mb.mmClient.CreatePost(&model.Post{
 				ParentId:  post.Id,

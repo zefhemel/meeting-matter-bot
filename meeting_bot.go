@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	_ "embed"
@@ -120,52 +121,62 @@ topicLoop:
 	return topicPosts, nil
 }
 
-func (mb *MeetingBot) handlePosted(evt *model.WebSocketEvent) {
-	post := model.Post{}
-	err := json.Unmarshal([]byte(evt.Data["post"].(string)), &post)
-	if err != nil {
-		fmt.Printf("Could not unmarshall post: %v\n", err)
-		return
+func (mb *MeetingBot) handleDirect(post *model.Post, channel *model.Channel) {
+	switch post.Message {
+	case "ping":
+		_, resp := mb.mmClient.SaveReaction(&model.Reaction{
+			UserId:    mb.botUser.Id,
+			PostId:    post.Id,
+			EmojiName: "ping_pong",
+		})
+		if resp.StatusCode != 200 {
+			fmt.Printf("Failed to respond to ping: %+v", resp)
+		}
+	case "help":
+		_, resp := mb.mmClient.CreatePost(&model.Post{
+			ParentId:  post.Id,
+			RootId:    post.Id,
+			Message:   helpText,
+			ChannelId: post.ChannelId,
+		})
+		if resp.StatusCode != http.StatusCreated {
+			fmt.Printf("Failed to respond: %+v", resp)
+		}
 	}
-	channel := mb.lookupChannel(post.ChannelId)
-	if channel.Type == model.CHANNEL_DIRECT {
-		if post.Message == "ping" {
-			_, resp := mb.mmClient.SaveReaction(&model.Reaction{
-				UserId:    mb.botUser.Id,
-				PostId:    post.Id,
-				EmojiName: "ping_pong",
-			})
-			if resp.StatusCode != 200 {
-				fmt.Printf("Failed to respond to ping: %+v", resp)
-			}
+}
+
+func cleanMessage(s string) string {
+	re := regexp.MustCompile(`[@#][\S]+`)
+	return strings.TrimSpace(re.ReplaceAllString(s, ""))
+}
+
+func (mb *MeetingBot) handleChannel(post *model.Post, channel *model.Channel) {
+	switch post.Hashtags {
+	case "#topic", "#agenda":
+		_, resp := mb.mmClient.SaveReaction(&model.Reaction{
+			UserId:    mb.botUser.Id,
+			PostId:    post.Id,
+			EmojiName: "pencil2",
+		})
+		if resp.StatusCode != 200 {
+			fmt.Printf("Failed to respond: %+v", resp)
+			return
+		}
+	case "#todo", "#task":
+		_, resp := mb.mmClient.SaveReaction(&model.Reaction{
+			UserId:    mb.botUser.Id,
+			PostId:    post.Id,
+			EmojiName: "memo",
+		})
+		if resp.StatusCode != 200 {
+			fmt.Printf("Failed to respond: %+v", resp)
 			return
 		}
 
-		if post.Message == "help" {
-			_, resp := mb.mmClient.CreatePost(&model.Post{
-				ParentId:  post.Id,
-				RootId:    post.Id,
-				Message:   helpText,
-				ChannelId: post.ChannelId,
-			})
-			if resp.StatusCode != http.StatusCreated {
-				fmt.Printf("Failed to respond: %+v", resp)
-			}
-			return
-		}
-	} else if channel.Type == model.CHANNEL_GROUP {
-		if post.Hashtags == "#topic" {
-			_, resp := mb.mmClient.SaveReaction(&model.Reaction{
-				UserId:    mb.botUser.Id,
-				PostId:    post.Id,
-				EmojiName: "pencil2",
-			})
-			if resp.StatusCode != 200 {
-				fmt.Printf("Failed to respond: %+v", resp)
-				return
-			}
-		}
-		if post.Message == "list topics" {
+	}
+	if strings.Contains(post.Message, fmt.Sprintf("@%s", mb.botUser.Username)) {
+		switch cleanMessage(post.Message) {
+		case "list topics":
 			topicPosts, err := mb.listTopicPosts(post.ChannelId)
 			if err != nil {
 				fmt.Printf("ERror: %+v", err)
@@ -184,7 +195,8 @@ func (mb *MeetingBot) handlePosted(evt *model.WebSocketEvent) {
 			if resp.StatusCode != 200 {
 				fmt.Printf("Failed to respond: %+v", resp)
 			}
-		} else if post.Message == "complete all" {
+
+		case "complete all":
 			topicPosts, err := mb.listTopicPosts(post.ChannelId)
 			if err != nil {
 				fmt.Printf("ERror: %+v", err)
@@ -211,6 +223,21 @@ func (mb *MeetingBot) handlePosted(evt *model.WebSocketEvent) {
 				return
 			}
 		}
+	}
+}
+
+func (mb *MeetingBot) handlePosted(evt *model.WebSocketEvent) {
+	post := model.Post{}
+	err := json.Unmarshal([]byte(evt.Data["post"].(string)), &post)
+	if err != nil {
+		fmt.Printf("Could not unmarshall post: %v\n", err)
+		return
+	}
+	channel := mb.lookupChannel(post.ChannelId)
+	if channel.Type == model.CHANNEL_DIRECT {
+		mb.handleDirect(&post, channel)
+	} else if channel.Type == model.CHANNEL_GROUP {
+		mb.handleChannel(&post, channel)
 	}
 
 	fmt.Printf("Here is the post %+v\n", post)
